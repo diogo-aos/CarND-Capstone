@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="styx" type="server.py" name="styx_server" />
+    <node pkg="waypoint_loader" type="waypoint_loader.py" name="waypoint_loader">
+        <param name="path" value="$(find styx)../../../data/wp_yaw_const.csv" />
+        <param name="velocity" value="40" />
+    </node>
+    <!-- <node pkg="waypoint_updater" type="waypoint_updater.py" name="waypoint_updater" /> -->
+
+</launch>
