@@ -33,8 +33,8 @@ class WaypointUpdater(object):
     def __init__(self):
         rospy.init_node('waypoint_updater')
 
-        rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
-        rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
+        rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size=2)
+        rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb, queue_size=1)
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
 
@@ -50,7 +50,7 @@ class WaypointUpdater(object):
         self.loop()
 
     def loop(self):
-        rate = rospy.Rate(50)
+        rate = rospy.Rate(30)
         while not rospy.is_shutdown():
 #            pdb.set_trace()
             if self.pose is not None and self.waypoint_tree is not None:
@@ -81,15 +81,17 @@ class WaypointUpdater(object):
     def publish_waypoints(self, closest_idx):
         lane = Lane()
         lane.waypoints = self.base_waypoints.waypoints[closest_idx:closest_idx+LOOKAHEAD_WPS]
+#        rospy.loginfo('closest_idx for publish = {} last point={}'.format(closest_idx, self.waypoints_2d[closest_idx+LOOKAHEAD_WPS-1]))
         self.final_waypoints_pub.publish(lane)
 
     def pose_cb(self, msg):
+#        rospy.loginfo('received pose: x={} y={}'.format(msg.pose.position.x, msg.pose.position.y))
         self.pose = msg
 
     def waypoints_cb(self, waypoints):
         rospy.loginfo('received waypoints')
         self.base_waypoints = waypoints
-        pdb.set_trace()
+#        pdb.set_trace()
         if self.waypoints_2d is None:
             self.waypoints_2d = [[w.pose.pose.position.x, w.pose.pose.position.y] for w in waypoints.waypoints]
             self.waypoint_tree = KDTree(self.waypoints_2d)
