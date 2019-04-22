@@ -11,6 +11,8 @@ import tf
 import cv2
 import yaml
 
+from scipy.spatial import KDTree
+
 STATE_COUNT_THRESHOLD = 3
 
 class TLDetector(object):
@@ -49,6 +51,10 @@ class TLDetector(object):
         self.last_wp = -1
         self.state_count = 0
 
+        self.base_waypoints = None
+        self.waypoints_2d = None
+        self.waypoint_tree = None
+
         rospy.spin()
 
     def pose_cb(self, msg):
@@ -56,6 +62,11 @@ class TLDetector(object):
 
     def waypoints_cb(self, waypoints):
         self.waypoints = waypoints
+        self.base_waypoints = waypoints
+        if self.waypoints_2d is None:
+            self.waypoints_2d = [[w.pose.pose.position.x, w.pose.pose.position.y] for w in waypoints.waypoints]
+            self.waypoint_tree = KDTree(self.waypoints_2d)
+
 
     def traffic_cb(self, msg):
         self.lights = msg.lights
@@ -90,7 +101,7 @@ class TLDetector(object):
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
         self.state_count += 1
 
-    def get_closest_waypoint(self, pose):
+    def get_closest_waypoint(self, x, y):
         """Identifies the closest path waypoint to the given position
             https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
         Args:
@@ -100,8 +111,8 @@ class TLDetector(object):
             int: index of the closest waypoint in self.waypoints
 
         """
-        #TODO implement
-        return 0
+        closest_idx = self.waypoint_tree.query([x,y], 1)[1]
+        return closest_idx
 
     def get_light_state(self, light):
         """Determines the current color of the traffic light
@@ -113,14 +124,17 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        if(not self.has_image):
-            self.prev_light_loc = None
-            return False
+        # for testing (in simulator), just return light state
+        return light.state
 
-        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        # if(not self.has_image):
+        #     self.prev_light_loc = None
+        #     return False
 
-        #Get classification
-        return self.light_classifier.get_classification(cv_image)
+        # cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+
+        # #Get classification
+        # return self.light_classifier.get_classification(cv_image)
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
@@ -131,18 +145,32 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        light = None
+        closest_light = None
+        line_wp_idx = None
 
         # List of positions that correspond to the line to stop in front of for a given intersection
         stop_line_positions = self.config['stop_line_positions']
-        if(self.pose):
-            car_position = self.get_closest_waypoint(self.pose.pose)
+        if self.pose and self.waypoint_tree:
+            car_wp_idx = self.get_closest_waypoint(self.pose.pose.position.x, self.pose.pose.position.y)
 
-        #TODO find the closest visible traffic light (if one exists)
+            #TODO find the closest visible traffic light (if one exists)
+            diff = len(self.waypoints.waypoints)
+            for i, light in enumerate(self.lights):
+                # get stop line waypoint index
+                line = stop_line_positions[i]
+                line_x, line_y = line[0], line[1]
+                temp_wp_idx = self.get_closest_waypoint(line_x, line_y)
 
-        if light:
+                # find closest stop line waypoint index
+                d = temp_wp_idx - car_wp_idx
+                if d>0 and d<diff:
+                    diff = d
+                    closest_light = light
+                    line_wp_idx = temp_wp_idx
+
+        if closest_light:
             state = self.get_light_state(light)
-            return light_wp, state
+            return line_wp_idx, state
         self.waypoints = None
         return -1, TrafficLight.UNKNOWN
 

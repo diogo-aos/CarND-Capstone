@@ -8,12 +8,6 @@ import math
 
 from twist_controller import Controller
 
-import time
-global t_start
-global wait_P
-t_start = time.time()
-wait_P = 5
-
 '''
 You can build this node only after you have built (or partially built) the `waypoint_updater` node.
 
@@ -87,16 +81,8 @@ class DBWNode(object):
         self.loop()
 
     def loop(self):
-        global t_start
-        global wait_P
         rate = rospy.Rate(50) # 50Hz
         while not rospy.is_shutdown():
-            if time.time() - t_start > wait_P:
-                rospy.logwarn('current_vel = {}'.format(self.current_vel))
-                rospy.logwarn('linear_vel = {}'.format(self.linear_vel))
-                rospy.logwarn('angular_vel = {}'.format(self.angular_vel))
-                rospy.logwarn('dbw_enabled = {}'.format(self.dbw_enabled))
-                t_start = time.time()
             # You should only publish the control commands if dbw is enabled
             if not None in (self.current_vel, self.linear_vel, self.angular_vel):
                 self.throttle, self.brake, self.steering = self.controller.control(self.current_vel, self.dbw_enabled, self.linear_vel, self.angular_vel)
@@ -113,7 +99,6 @@ class DBWNode(object):
         self.angular_vel = msg.twist.angular.z
 
     def velocity_cb(self, msg):
-        rospy.logwarn('got velocity message')
         self.current_vel = msg.twist.linear.x
 
     def publish(self, throttle, brake, steer):
